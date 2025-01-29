@@ -4,7 +4,7 @@ Team Members: Kevin Pasato, Jonathan Tyner, Matthew Chu, Alae Laaziri, Naser Sha
 
 Project Topic: SecureDove
 
-Develop an instant messenger that provides secure messaging
+- Develop an instant messenger that provides secure messaging
 with explicit confidentiality and integrity defenses
 
 
