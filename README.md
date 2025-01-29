@@ -7,6 +7,7 @@ Project Topic: SecureDove
 Develop an instant messenger that provides secure messaging
 with explicit confidentiality and integrity defenses
 
+
 Functional Requirements:
 1. User Account Management
 2. Message Sending and Receiving
