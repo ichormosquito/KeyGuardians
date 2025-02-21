@@ -5,7 +5,7 @@ import html
 import bcrypt
 from uuid import uuid4
 import uuid
-
+import re
 
 
 app = Flask(__name__)
@@ -90,6 +90,11 @@ def register():
         if verification != password:
             return render_template('register.html', error="Passwords dont't match")
         
+        # Validate email format
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, email):
+            return render_template('register.html', error="Please make sure email is valid")
+        
         #sanitize inputs
         safeusername = html.escape(username)
         safeemail = html.escape(email)
@@ -98,8 +103,9 @@ def register():
         user = usercred_collection.find_one({"$or": [{"username": safeusername},{"email": safeemail}]})
 
         if not user:
-            # Generate a unique userid
+            # Generate a unique userid & authtoken
             userid = str(uuid.uuid4())
+            authtoken = uuid4()
 
             salt = bcrypt.gensalt(rounds=12)  
             hashedpassword = bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
@@ -108,16 +114,22 @@ def register():
             if not is_valid:
                 return render_template('register.html', error=message)
             
+            hashedtoken = (sha256(str(authtoken).encode('utf-8'))).hexdigest()
+            
             #if password is valid proceed to register user
             registered_user = {
                 "userid": userid,  
                 "username": safeusername,
                 "password": hashedpassword,
-                "email": safeemail
+                "email": safeemail,
+                "authtoken": hashedtoken
             }
 
             usercred_collection.insert_one(registered_user)
-            return redirect(url_for('home'))
+            response = make_response(redirect(url_for('home')))
+            response.set_cookie('authtoken', str(authtoken), max_age = 60 * 60, httponly=True)
+
+            return response
         
         #let user know whats wrong
         else:
