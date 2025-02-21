@@ -1,0 +1,71 @@
+body {
+    background-color: #98D8BE;
+   display: flex;
+   justify-content: center;
+   align-items: center;
+   height: 100vh;
+   margin: 0;
+   font-family: Arial, sans-serif;
+   }
+   .authentication-card {
+   background-color: #4A5361;
+   padding: 30px;
+   border-radius: 5px;
+   width: 300px;
+   color: white;
+   }
+   .logo {
+   text-align: center;
+   margin-bottom: 20px;
+   }
+   .logo img {
+   max-width: 100px;
+   height: auto;
+   display: block;
+   margin: 0 auto;
+   }
+   h1 {
+   text-align: center;
+   margin: 10px 0 30px 0;
+   }
+   input[type="text"],
+   input[type="password"] {
+   width: calc(100%);
+   padding: 8px;
+   margin: 8px 0 20px 0;
+   border: none;
+   border-radius: 3px;
+   display: block;
+   box-sizing: border-box;
+   }
+   label {
+   display: block;
+   width: 100%;
+   }
+   form {
+   width: 100%;
+   }
+   button {
+   width: 60%;
+   padding: 8px;
+   background-color: black;
+   color: white;
+   border: none;
+   border-radius: 3px;
+   cursor: pointer;
+   display: block;
+   margin: 0 auto;
+   }
+   .auth-switch {
+   text-align: center;
+   margin-top: 20px;
+   font-size: 14px;
+   }
+   .auth-switch a {
+   color: #98D8BE;
+   text-decoration: none;
+   font-weight: bold;
+   }
+   .auth-switch a:hover {
+   text-decoration: underline;
+   }

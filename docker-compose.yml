@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:4.2.5
+
+  app:
+    build: .
+    environment:
+      WAIT_HOSTS: mongo:27017
+    ports:
+      - '2000:2000'

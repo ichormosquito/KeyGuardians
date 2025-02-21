@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>SecureDove</title>
+    <link rel="stylesheet" href="/static/style.css"/>
+        <link rel="shortcut icon" type="image/x-icon" href="/static/images/favicon.ico">
+</head>
+
+
+<body>
+    <div class="authentication-card">
+        <div class="logo">
+            <img src="static/images/logo.png">
+        </div>
+        <h1>SecureDove</h1>
+
+        {% if error %}
+        <p style="color: red;">{{ error }}</p>
+        {% endif %}
+
+        <form action="/login" method="post" enctype="application/x-www-form-urlencoded">
+            <label>email / username:
+                <input type="text" name="identifier" required/>
+            </label>
+            <br/>
+            <label>Password:&nbsp;
+                <input type="password" name="password" required>
+            </label>
+            <button type="submit">Login</button>
+        </form>
+        
+        <p class="auth-switch">Don't have an account? <a href="/register">Click here</a> to register</p>
+    </div>
+</body>
+
+
+</html>
