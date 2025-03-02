@@ -29,8 +29,20 @@ def home():
     if not user:
         return redirect(url_for('login'))
 
-    return render_template('index.html')
+    return render_template('home.html')
         
+@app.route('/message')
+def message():
+    authtoken = request.cookies.get('authtoken')
+
+    hashedtoken = (sha256(str(authtoken).encode('utf-8'))).hexdigest()
+
+    user = usercred_collection.find_one({"authtoken": hashedtoken})
+
+    if not user:
+        return redirect(url_for('login'))
+
+    return render_template('messageFriends.html')
 
 
 

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureDove Messaging</title>
+    <link rel="stylesheet" href="/static/messageFriends.css"/>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <img src="/static/images/logo.png" alt="SecureDove Logo" class="logo">
+        <h1 class="title">SecureDove</h1>
+        <div class="buttons">
+            <button onclick="window.location.href='/account'">Account</button>
+            <button onclick="window.location.href='/message'">Message</button>
+        </div>
+    </div>
+    <div class="friends-sidebar">
+        <h2>Friends</h2>
+        <div class="friend">Bob</div>
+    </div>
+    <div class="chat-container">
+        <div class="chat-box">
+            <div class="recieved-message">Bob: hello</div>
+            <div class="user-message">Hi Bob</div>
+        </div>
+        <div class="input-container">
+            <input type="text" placeholder="Type Here">
+            <button>File</button>
+            <button>Send</button>
+        </div>
+    </div>
+</body>
+</html>
