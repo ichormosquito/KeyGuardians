@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Management</title>
+    <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+    <div class="authentication-card">
+        <div class="logo">
+            <img src="/static/images/logo.png">
+        </div>
+        <h1>Account Management</h1>
+
+        <p><strong>Username:</strong> {{ user.username }}</p>
+        <p><strong>Email:</strong> {{ user.email }}</p>
+        <p><strong>User ID:</strong> {{ user.userid }}</p>
+
+        <form action="/account" method="POST">
+            <label>New Email:
+                <input type="email" name="email"/>
+            </label>
+            <br/>
+            <label>New Password:
+                <input type="password" name="password"/>
+            </label>
+            <br/>
+            <button type="submit">Update</button>
+        </form>
+
+        <form action="/delete_account" method="POST" onsubmit="return confirm('Are you sure you want to delete your account?');">
+            <button type="submit" style="background-color: red;">Delete Account</button>
+        </form>
+
+        <p class="auth-switch"><a href="/home">Return to Home</a></p>
+    </div>
+</body>
+</html>
