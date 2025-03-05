@@ -231,5 +231,10 @@ def delete_account():
         return response
     return redirect(url_for('login'))# go back to login 
 
+@app.route('/logout')
+def logout():
+    response =make_response(redirect(url_for('login')))#after loggin out, bring back to login page
+    response.delete_cookie('authtoken')#remove auth token
+    return response
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=2000)
