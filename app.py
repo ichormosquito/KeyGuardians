@@ -193,6 +193,43 @@ def set_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     return response
 
+@app.route('/account',methods=['GET','POST'])#accound page lets you view or update info
+def account():
+    authtoken = request.cookies.get('authtoken')#check cookies for auth token
+    if not authtoken:
+        return redirect(url_for('login'))
+    hashedtoken=sha256(authtoken.encode('utf-8')).hexdigest()#hashing token
+    user =usercred_collection.find_one({"authtoken":hashedtoken})
+    if not user:
+        return redirect(url_for('login'))
+    if request.method=='POST':#allowing user to request updates to email or password
+        new_email =request.form.get('email')
+        new_password =request.form.get('password')
+        update_fields ={}
+        if new_email:
+            update_fields["email"] = html.escape(new_email)
+        if new_password and len(new_password.strip())>0:
+            salt = bcrypt.gensalt(rounds=12)
+            hashed_password= bcrypt.hashpw(new_password.encode('utf-8'), salt).decode('utf-8')#hashing new pass
+            update_fields["password"] = hashed_password
+        if update_fields:
+            usercred_collection.update_one({"userid": user["userid"]}, {"$set": update_fields})#update database with new acc info
+        return redirect(url_for('account'))#refresh account page to reflect the changes
+    return render_template('account.html',user=user)
+@app.route('/delete_account', methods=['POST'])#allows the user to delete the account
+def delete_account():
+    authtoken=request.cookies.get('authtoken')#first we get the users auth token
+    if not authtoken:
+       return render_template('login.html',error="Not Logged Into An Account To Delete.")
+
+    hashedtoken =sha256(authtoken.encode('utf-8')).hexdigest()
+    user =usercred_collection.find_one({"authtoken": hashedtoken})
+    if user:
+        usercred_collection.delete_one({"userid": user["userid"]})#finds user and delete account
+        response=make_response(redirect(url_for('register')))# makes sure to remove the auth token from cookies and goes back to account registration
+        response.delete_cookie('authtoken')
+        return response
+    return redirect(url_for('login'))# go back to login 
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=2000)
