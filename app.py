@@ -237,7 +237,28 @@ def send_message():
 
 
 
+@app.route('/get_messages', methods=['GET'])
+def get_messages():
+    #find user by authtoken
+    auth_token = request.cookies.get('authtoken')
+    if auth_token:
+        hashedtoken = (sha256(str(auth_token).encode('utf-8'))).hexdigest()
+        user_in_database = usercred_collection.find_one({"authtoken": hashedtoken})
 
+        if user_in_database: # If user is found in database, get and return messages
+            username = user_in_database['username']
+            messages = list(message_collection.find({
+                '$or': [{'sender': username}, {'recipient': username}]
+            }))
+            for message in messages:
+                message['_id'] = str(message['_id'])  # Convert ObjectId to string
+            return jsonify({'messages': messages})
+
+        else:
+            return jsonify({"error": "User records not found"}), 404
+    else:
+        return jsonify({"error": "Authtoken not found"}), 401
+    
 @app.after_request
 def set_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
