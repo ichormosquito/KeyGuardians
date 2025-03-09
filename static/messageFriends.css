@@ -45,6 +45,8 @@ body {
     width: 20%;
     background-color: #f47c43;
     padding: 10px;
+    overflow-y: auto; /* Make friends list scrollable */
+    max-height: 100vh; /* Ensure it doesn't exceed viewport height */
 }
 .friends-sidebar h2 {
     color: white;
@@ -70,17 +72,23 @@ body {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    overflow-y: auto; 
+    max-height: calc(100vh - 150px); 
 }
 .recieved-message {
     background-color: lightgray;
     padding: 5px 10px;
     width: fit-content;
+    max-width: 40%; 
+    word-wrap: break-word;
 }
 .user-message {
     align-self: flex-end;
     padding: 5px 10px;
     width: fit-content;
-    background-color: lightgray;
+    max-width: 40%; 
+    word-wrap: break-word; 
+    background-color: lightblue; 
 }
 .input-container {
     display: flex;

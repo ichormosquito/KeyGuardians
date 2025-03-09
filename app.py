@@ -44,7 +44,7 @@ def message():
     if not user:
         return redirect(url_for('login'))
 
-    return render_template('messageFriends.html')
+    return render_template('messageFriends.html', user=user)
 
 
 
@@ -215,6 +215,11 @@ def send_message():
                     print ("Message and recipient required")
                     return jsonify({"error": "message and recipient required."}), 400
                 
+                # Check if recipient exists in db
+                recipient_user = usercred_collection.find_one({"username": recipient})
+                if not recipient_user:
+                    return jsonify({"error": "unknown user"}), 400
+
                 # Save message into database
                 stored_message = {
                     "sender": username,
@@ -250,9 +255,10 @@ def get_messages():
             messages = list(message_collection.find({
                 '$or': [{'sender': username}, {'recipient': username}]
             }))
+
             for message in messages:
-                message['_id'] = str(message['_id'])  # Convert ObjectId to string
-            return jsonify({'messages': messages})
+                message['_id'] = str(message['_id'])  
+            return jsonify({'messages': messages, 'username': username}) # Ret messages and username
 
         else:
             return jsonify({"error": "User records not found"}), 404

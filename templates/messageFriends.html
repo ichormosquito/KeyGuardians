@@ -18,21 +18,27 @@
     </div>
     <div class="friends-sidebar">
         <h2>Friends</h2>
-        <div class="friend">Bob</div>
+        <div>
+            <input type="text" id="newFriendUsername" placeholder="username">
+            <button onclick="startConversation()">Send</button>
+            <div id="newFriendError" style="color: red;"></div>
+        </div>
+        <div id="friends-list"></div>
     </div>
     <div class="chat-container">
-        <div class="chat-box">
-            <div class="recieved-message">Bob: hello</div>
-            <div class="user-message">Hi Bob</div>
+        <div class="chat-box" id="chat-box">
+            <div class="initial-message">Type a username into your friends list or click on a friend to start a conversation</div>
         </div>
-        <div class="input-container">
+        <div class="input-container" id="input-container" style="display: none;">
             <input type="text" id="messageInput" placeholder="Type Here">
             <button onclick="sendMessage()">Send</button>
-
             <button>File</button>
         </div>
     </div>
 
     <script src="/static/functions.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', initializeMessaging);
+    </script>
 </body>
 </html>
