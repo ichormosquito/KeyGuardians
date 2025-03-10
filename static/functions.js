@@ -42,7 +42,11 @@ function initializeMessaging() {
                 const friendDiv = document.createElement('div');
                 friendDiv.classList.add('friend');
                 friendDiv.textContent = friend;
-                friendDiv.onclick = () => loadChatHistory(friend);
+                friendDiv.onclick = () => {
+                    selectedfriend = friend; 
+                    loadChatHistory(friend);
+                    pollingFunction();
+                };
                 friendsList.appendChild(friendDiv);
             });
         })
@@ -139,6 +143,41 @@ function startConversation() {
     })
     .catch(error => console.error("Error:", error));
 }
+
+let ajaxPollingInterval; 
+let messageCountUpdate = 0; 
+
+function pollingFunction(){
+    clearInterval(ajaxPollingInterval); 
+  
+    ajaxPollingInterval = setInterval(() => {
+        fetch('/get_messages')
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    console.error("Error:", data.error);
+                    return;
+                }
+                const messages = data.messages.filter(message =>
+                    (message.sender === selectedfriend && message.recipient === data.username) || (message.sender === data.username && message.recipient === selectedfriend));
+
+                if (messages.length !== messageCountUpdate) {
+                    messageCountUpdate = messages.length;
+                    const chatBox = document.querySelector(".chat-box");
+                    chatBox.innerHTML = '';  
+
+                    messages.forEach(message => {
+                        const messageDiv = document.createElement('div');
+                        messageDiv.classList.add(message.sender === data.username ? 'user-message' : 'received-message');
+                        messageDiv.textContent = `${message.sender}: ${message.message}`;
+                        chatBox.appendChild(messageDiv);
+                    });
+                }
+            })
+            .catch(error => console.error("Error:", error));
+    }, 3000);  // Polling interval is every 3 seconds
+}
+
 
 // function updateChat(){
 //     const request = new XMLHttpRequest(); 

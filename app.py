@@ -208,6 +208,8 @@ def send_message():
                 message = data.get('message')
                 recipient = data.get('recipient')
 
+                message = html.escape(message)
+
                 print(f"Recipient: {recipient}")
                 print((f"Message: {message}"))
 
