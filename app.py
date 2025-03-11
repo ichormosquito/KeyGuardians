@@ -17,7 +17,7 @@ from werkzeug.utils import secure_filename
 from flask import send_file
 
 
-app = Flask(__name__)
+app = Flask(__name__,static_url_path='/static')
 
 
 mongo_client = MongoClient("mongodb://mongo:27017/")
