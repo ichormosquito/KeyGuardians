@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, request, url_for, make_response
+from flask import Flask, render_template, redirect, request, url_for, make_response, jsonify
 from pymongo import MongoClient
 from hashlib import sha256
 import html
@@ -6,6 +6,8 @@ import bcrypt
 from uuid import uuid4
 import uuid
 import re
+import json
+from bson import ObjectId
 
 
 app = Flask(__name__)
@@ -14,7 +16,7 @@ app = Flask(__name__)
 mongo_client = MongoClient("mongodb://mongo:27017/")
 db = mongo_client["secureDove"]
 usercred_collection = db["credentials"]
-
+message_collection = db["messages"]
 
 
 
@@ -29,8 +31,20 @@ def home():
     if not user:
         return redirect(url_for('login'))
 
-    return render_template('index.html')
+    return render_template('home.html')
         
+@app.route('/message')
+def message():
+    authtoken = request.cookies.get('authtoken')
+
+    hashedtoken = (sha256(str(authtoken).encode('utf-8'))).hexdigest()
+
+    user = usercred_collection.find_one({"authtoken": hashedtoken})
+
+    if not user:
+        return redirect(url_for('login'))
+
+    return render_template('messageFriends.html', user=user)
 
 
 
@@ -172,10 +186,87 @@ def validate_password(password):
     # If all checks pass
     return True, ""
 
+@app.route('/send_message', methods=['POST'])
+def send_message():
+    if request.method == 'POST':
+        auth_token = request.cookies.get('authtoken')
+        # Checks if user has auth token
+        if auth_token:
+            
+            print(f"Auth Token: {auth_token}")
+            # Gets user info from database collection 
+            hashedtoken = (sha256(str(auth_token).encode('utf-8'))).hexdigest()
+
+            user_in_database = usercred_collection.find_one({"authtoken": hashedtoken})
+
+            if user_in_database:
+                print(f"User is: {user_in_database['username']}")
+                username = user_in_database['username']
+
+                # Get message and recipient
+                data = request.get_json()
+                message = data.get('message')
+                recipient = data.get('recipient')
+
+                message = html.escape(message)
+
+                print(f"Recipient: {recipient}")
+                print((f"Message: {message}"))
+
+                if not message or not recipient:
+                    print ("Message and recipient required")
+                    return jsonify({"error": "message and recipient required."}), 400
+                
+                # Check if recipient exists in db
+                recipient_user = usercred_collection.find_one({"username": recipient})
+                if not recipient_user:
+                    return jsonify({"error": "unknown user"}), 400
+
+                # Save message into database
+                stored_message = {
+                    "sender": username,
+                    "recipient": recipient,
+                    "message": message
+                }
+
+                add_message = message_collection.insert_one(stored_message)
+                stored_message["_id"] = str(add_message.inserted_id)
+
+                return jsonify(stored_message)
+
+
+            if not user_in_database:
+                print("User records not found")
+                return jsonify({"error": "User records not found"}), 404
+
+        else:
+            return jsonify({"error": "Authtoken not found"}), 401
 
 
 
+@app.route('/get_messages', methods=['GET'])
+def get_messages():
+    #find user by authtoken
+    auth_token = request.cookies.get('authtoken')
+    if auth_token:
+        hashedtoken = (sha256(str(auth_token).encode('utf-8'))).hexdigest()
+        user_in_database = usercred_collection.find_one({"authtoken": hashedtoken})
 
+        if user_in_database: # If user is found in database, get and return messages
+            username = user_in_database['username']
+            messages = list(message_collection.find({
+                '$or': [{'sender': username}, {'recipient': username}]
+            }))
+
+            for message in messages:
+                message['_id'] = str(message['_id'])  
+            return jsonify({'messages': messages, 'username': username}) # Ret messages and username
+
+        else:
+            return jsonify({"error": "User records not found"}), 404
+    else:
+        return jsonify({"error": "Authtoken not found"}), 401
+    
 @app.after_request
 def set_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
