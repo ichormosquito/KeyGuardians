@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureDove Messaging</title>
+    <link rel="stylesheet" href="/static/messageFriends.css"/>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <img src="/static/images/logo.png" alt="SecureDove Logo" class="logo">
+        <h1 class="title">SecureDove</h1>
+        <div class="buttons">
+            <button onclick="window.location.href='/account'">Account</button>
+            <button onclick="window.location.href='/message'">Message</button>
+        </div>
+    </div>
+    <div class="friends-sidebar">
+        <h2>Friends</h2>
+        <div>
+            <input type="text" id="newFriendUsername" placeholder="username">
+            <button onclick="startConversation()">Send</button>
+            <div id="newFriendError" style="color: red;"></div>
+        </div>
+        <div id="friends-list"></div>
+    </div>
+    <div class="chat-container">
+        <div class="chat-box" id="chat-box">
+            <div class="initial-message">Type a username into your friends list or click on a friend to start a conversation</div>
+        </div>
+        <div class="input-container" id="input-container" style="display: none;">
+            <input type="text" id="messageInput" placeholder="Type Here">
+            <button onclick="sendMessage()">Send</button>
+            <button>File</button>
+        </div>
+    </div>
+
+    <script src="/static/functions.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', initializeMessaging);
+    </script>
+</body>
+</html>
