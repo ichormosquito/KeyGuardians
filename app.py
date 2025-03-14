@@ -12,12 +12,14 @@ import os
 import base64
 import secrets
 import hashlib
+import io
 from Crypto.Cipher import AES
 from werkzeug.utils import secure_filename
 from flask import send_file
 
 
-app = Flask(__name__,static_url_path='/static')
+app = Flask(__name__,static_folder='static', static_url_path='/static')
+
 
 
 mongo_client = MongoClient("mongodb://mongo:27017/")
@@ -247,8 +249,6 @@ def send_message():
         else:
             return jsonify({"error": "Authtoken not found"}), 401
 
-
-
 @app.route('/get_messages', methods=['GET'])
 def get_messages():
     #find user by authtoken
@@ -265,8 +265,12 @@ def get_messages():
 
             for message in messages:
                 message['_id'] = str(message['_id'])  
-            return jsonify({'messages': messages, 'username': username}) # Ret messages and username
-
+            files=list(db["files"].find({"recipient":username}))#retrieve the files send to the user
+            for f in files:#make objectId a string and mark it as a file entry
+                f["_id"]= str(f["_id"])
+                f["isFile"]= True
+            combined=messages+files#messages and files are in one list
+            return jsonify({'messages':combined,'username':username})
         else:
             return jsonify({"error": "User records not found"}), 404
     else:
@@ -329,55 +333,67 @@ os.makedirs(UPLOAD_FOLDER,exist_ok=True)#checks to make sure the local device fi
 File_Size_Cap=50 *1024*1024  #variable that holds the max size of file which is 50mb.
 ENCRYPTION_KEY= secrets.token_bytes(32)  # 256-bit AES key
 app.config["UPLOAD_FOLDER"]=UPLOAD_FOLDER
-def encrypt_file(file_data):#use aes256 to encrypt file to keep secure
-    iv= secrets.token_bytes(16)  # Generate a random IV
-    cipher= AES.new(ENCRYPTION_KEY, AES.MODE_CBC, iv)
-    pad_len=16- (len(file_data) %16)
-    file_data+= bytes([pad_len]) * pad_len
-    encrypted_data = cipher.encrypt(file_data)
-    return iv+encrypted_data  # Prepend IV for decryption
+def encrypt_file(file_data):
+    iv =secrets.token_bytes(16)#enerate a random IV
+    cipher=AES.new(ENCRYPTION_KEY, AES.MODE_CBC,iv)
+    pad_len=16-(len(file_data) %16)
+    file_data+=bytes([pad_len] * pad_len)  #padding
+    encrypted_data=cipher.encrypt(file_data)
+    return iv+ encrypted_data
 def compute_checksum(file_data):#helper to get checksum value
     return hashlib.sha256(file_data).hexdigest()
+
 @app.route('/upload_file',methods=['POST'])
 def upload_file():
-    if 'file' not in request.files:
-        return jsonify({"error":"No file provided"}),400
-    file=request.files['file']
-    recipient=request.form.get("recipient")
+    authtoken =request.cookies.get('authtoken')# makes sure the user is authenticated
+    if not authtoken:
+        return jsonify({"error": "not logged in"}),401
+    hashedtoken=sha256(str(authtoken).encode('utf-8')).hexdigest()
+    user=usercred_collection.find_one({"authtoken": hashedtoken})
+    if not user:
+        return jsonify({"error": "user not found"}),404
+    if'file' not in request.files:# check to see if a file was selected 
+        return jsonify({"error": "no file chosen"}),400
+    file =request.files['file']
+    recipient= request.form.get("recipient")
     if not recipient:
-        return jsonify({"error": "needs to be the recipient"}),400
-    if file.filename == '':
-        return jsonify({"error": "no file was selected"}), 400
-    if file and file.content_length >File_Size_Cap:
-        return jsonify({"error": "The file size is greater than the 50MB limit"}),400
-    filename= secure_filename(file.filename)
+        return jsonify({"error": "needs to be the recipient"}), 400
+    if file.filename =='':
+        return jsonify({"error":"no file was selected"}),400
+    if file and file.content_length >File_Size_Cap:#size limit
+        return jsonify({"error":"File size is greater than 50MB"}), 400
+    filename =secure_filename(file.filename)
     file_data=file.read()
-    encrypted_data =encrypt_file(file_data)
-    checksum =compute_checksum(encrypted_data)
-    file_path=os.path.join(app.config['UPLOAD_FOLDER'],filename)
+    checksum =compute_checksum(file_data)
+    encrypted_data=encrypt_file(file_data)
+    file_path= os.path.join(app.config['UPLOAD_FOLDER'],filename)
     with open(file_path,'wb') as f:
         f.write(encrypted_data)
-    file_entry={#storing file information in array and then store it in db
-        "sender": user["username"],
-        "recipient": recipient,
-        "filename":filename,
-        "checksum":checksum,
-        "file_path":file_path}
-    db["files"].insert_one(file_entry)#insert to db
-    return jsonify({"message": "file uploaded"}), 200
-@app.route('/download_file/<filename>', methods=['GET'])
+    file_entry={"sender":user["username"],"recipient": recipient,
+        "filename":filename,"checksum":checksum,"file_path": file_path}
+    db["files"].insert_one(file_entry)
+    return jsonify({"message": "file uploaded"}),200
+def decrypt_file(encrypted_data):
+    iv =encrypted_data[:16]#take IV from the first 16 bytes
+    cipher=AES.new(ENCRYPTION_KEY,AES.MODE_CBC, iv)
+    decrypted_data=cipher.decrypt(encrypted_data[16:])#decrypt after IV
+    pad_len = decrypted_data[-1]
+    return decrypted_data[:-pad_len]#take away padding
+@app.route('/download_file/<filename>',methods=['GET'])
 def download_file(filename):
-    file_entry= db["files"].find_one({"filename": filename})
+    file_entry=db["files"].find_one({"filename":filename})
     if not file_entry:
-        return jsonify({"error": "file was not found"}), 404
-    file_path= file_entry["file_path"]
+        return jsonify({"error":"file was not found"}),404
+    file_path = file_entry["file_path"]
     with open(file_path, 'rb') as f:
-        file_data =f.read()
-    stored_checksum= file_entry["checksum"]#verify file entry using checksums
-    computed_checksum= compute_checksum(file_data)
+        encrypted_data =f.read()
+    decrypted_data=decrypt_file(encrypted_data)
+    stored_checksum= file_entry["checksum"]
+    computed_checksum=compute_checksum(decrypted_data)
     if stored_checksum!=computed_checksum:
-        return jsonify({"error": "File Integrity vulnerable"}), 500
-    return send_file(file_path, as_attachment=True,download_name=filename)
+        return jsonify({"error": "File Integrity compromised"}),500
+    return send_file(io.BytesIO(decrypted_data),as_attachment=True,download_name=filename)
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=2000)

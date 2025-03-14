@@ -69,13 +69,31 @@ function loadChatHistory(friend) {
             const chatBox = document.querySelector(".chat-box");
             chatBox.innerHTML = '';
             messages.forEach(msg => {
-                if ((msg.sender === friend && msg.recipient === loggedInUser) || (msg.sender === loggedInUser && msg.recipient === friend)) {
-                    const messageDiv = document.createElement('div');
-                    messageDiv.classList.add(msg.sender === loggedInUser ? 'user-message' : 'recieved-message');
-                    messageDiv.textContent = `${msg.sender}: ${msg.message}`;
-                    chatBox.appendChild(messageDiv);
-                }
-            });
+                if (
+                    (msg.sender === friend && msg.recipient === loggedInUser) || 
+                    (msg.sender === loggedInUser && msg.recipient === friend)
+                ) {
+                    //checking to see if the message has a file and if so it wont send undefined message as well
+                    if(msg.isFile){
+                        const fileDiv=document.createElement('div');
+                        if (msg.sender=== loggedInUser) {
+                            fileDiv.classList.add('user-message');}
+                        else{
+                            fileDiv.classList.add('recieved-message');}
+                        const downloadLink=document.createElement('a');
+                        downloadLink.href=`/download_file/${msg.filename}`;
+                        downloadLink.textContent=`Download ${msg.filename}`;
+                        downloadLink.download =msg.filename;
+                        fileDiv.appendChild(downloadLink);
+                        chatBox.appendChild(fileDiv);}
+                        else{
+                        const messageDiv = document.createElement('div');
+                        if(msg.sender === loggedInUser){
+                            messageDiv.classList.add('user-message');}
+                        else{
+                            messageDiv.classList.add('recieved-message');}
+                        messageDiv.textContent= `${msg.sender}: ${msg.message}`;
+                        chatBox.appendChild(messageDiv);}}});            
             document.getElementById("input-container").style.display = "flex";
             loadReceivedFiles();
         })
@@ -142,10 +160,10 @@ function startConversation() {
         loadChatHistory(newFriend);})
     .catch(error => console.error("Error:", error));}
 function uploadFile(){// functionality for file upload
-    let fileInput = document.getElementById("fileInput");
-    let file = fileInput.files[0];
+    let fileInput=document.getElementById("fileInput");
+    let file= fileInput.files[0];
     if(!file){
-        console.log("No file selected");
+        console.log("no file selected");
         return;}
     let formData= new FormData();
     formData.append("file", file);
@@ -198,12 +216,27 @@ function pollingFunction(){
                     messageCountUpdate = messages.length;
                     const chatBox =document.querySelector(".chat-box");
                     chatBox.innerHTML ='';
-                    messages.forEach(message => {
-                        const messageDiv = document.createElement('div');
-                        messageDiv.classList.add(message.sender === data.username ? 'user-message' : 'received-message');
-                        messageDiv.textContent = `${message.sender}: ${message.message}`;
-                        chatBox.appendChild(messageDiv);
-                    });}})
+                    messages.forEach(msg =>{
+                        if(msg.isFile){
+                            const fileDiv =document.createElement('div');
+                            if(msg.sender===loggedInUser){
+                                fileDiv.classList.add('user-message');}
+                            else{
+                                fileDiv.classList.add('recieved-message');}
+                            const downloadLink=document.createElement('a');
+                            downloadLink.href=`/download_file/${msg.filename}`;
+                            downloadLink.textContent=`Download ${msg.filename}`;
+                            downloadLink.download=msg.filename;
+                            fileDiv.appendChild(downloadLink);
+                            chatBox.appendChild(fileDiv);}
+                        else{
+                            const messageDiv=document.createElement('div');
+                            if(msg.sender=== loggedInUser) {
+                                messageDiv.classList.add('user-message');}
+                            else{
+                                messageDiv.classList.add('recieved-message');}
+                            messageDiv.textContent=`${msg.sender}: ${msg.message}`;
+                            chatBox.appendChild(messageDiv);}});}})
             .catch(error => console.error("Error:", error));
     }, 3000);}  //polling every 3 seconds
 
