@@ -8,7 +8,8 @@ import uuid
 import re
 import json
 from bson import ObjectId
-
+from collections import defaultdict
+from time import time
 
 app = Flask(__name__)
 
@@ -18,8 +19,87 @@ db = mongo_client["secureDove"]
 usercred_collection = db["credentials"]
 message_collection = db["messages"]
 
+#DoS protection
+class RateLimiter:
+    def __init__(self, max_requests=50, time_window=10, block_duration=300):
+        #store request timestamps by IP
+        self.request_history = defaultdict(list) 
+        #store blocked IPs with block time
+        self.blocked_ips = {} 
+        #config params
+        self.max_requests = max_requests
+        self.time_window = time_window
+        self.block_duration = block_duration
+        print(f"RateLimiter initialized: {max_requests} requests per {time_window}s, block duration: {block_duration}s")
+    
+    def get_client_ip(self):
+        #extract real client IP from headers or remote_addr
+        ip = request.headers.get('X-Forwarded-For', 
+              request.headers.get('X-Real-IP', request.remote_addr))
+        print(f"Client IP detected: {ip}")
+        return ip
+    
+    def is_allowed(self):
+        #check if request is allowed based on rate limiting rules
+        ip = self.get_client_ip()
+        current_time = time()
+        
+        #check if IP is currently blocked
+        if ip in self.blocked_ips:
+            #if block duration has passed, unblock the IP
+            if current_time - self.blocked_ips[ip] >= self.block_duration:
+                print(f"Unblocking IP: {ip} (block duration expired)")
+                del self.blocked_ips[ip]
+                self.request_history[ip] = []  #clear history for this IP
+            else:
+                block_time_left = int(self.block_duration - (current_time - self.blocked_ips[ip]))
+                print(f"Blocking request from {ip}: still blocked for {block_time_left}s")
+                return False  #IP is still blocked
+        
+        #record this request
+        self.request_history[ip].append(current_time)
+        
+        #remove timestamps older than the time window
+        old_count = len(self.request_history[ip])
+        self.request_history[ip] = [
+            timestamp for timestamp in self.request_history[ip] 
+            if current_time - timestamp <= self.time_window
+        ]
+        new_count = len(self.request_history[ip])
+        if old_count != new_count:
+            print(f"Cleaned {old_count - new_count} old requests from history for {ip}")
+        
+        #check if request count exceeds the limit
+        request_count = len(self.request_history[ip])
+        print(f"Request count for {ip}: {request_count}/{self.max_requests} in last {self.time_window}s")
+        
+        if request_count > self.max_requests:
+            print(f"Rate limit exceeded for {ip}. Blocking for {self.block_duration}s")
+            self.blocked_ips[ip] = current_time  #block this IP
+            return False
+        
+        return True
 
+#initialize rate limiter with custom settings
+#allow 100 requests per minute, block for 10 minutes if exceeded
+rate_limiter = RateLimiter(
+    max_requests=100,
+    time_window=60,
+    block_duration=600
+)
 
+#add rate limiting middleware
+@app.before_request
+def limit_requests():
+    #skip rate limiting for static resources if applicable
+    if request.path.startswith('/static/'):
+        return None
+        
+    if not rate_limiter.is_allowed():
+        print(f"Rate limit response sent: 429 Too Many Requests")
+        return "Rate limit exceeded. Please try again later.", 429
+
+      
 @app.route('/')
 def home():
     authtoken = request.cookies.get('authtoken')
@@ -45,8 +125,6 @@ def message():
         return redirect(url_for('login'))
 
     return render_template('messageFriends.html', user=user)
-
-
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -88,9 +166,6 @@ def login():
             return render_template('login.html', error="Incorrect Password, Please try again")
         
     return render_template('login.html')
-
-
-
 
 
 @app.route('/register', methods = ['GET', 'POST'])
@@ -160,8 +235,6 @@ def register():
     return render_template('register.html')
 
 
-
-
 #helper functions
 def validate_password(password):
     
@@ -185,6 +258,7 @@ def validate_password(password):
 
     # If all checks pass
     return True, ""
+
 
 @app.route('/send_message', methods=['POST'])
 def send_message():
