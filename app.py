@@ -10,6 +10,13 @@ import json
 from bson import ObjectId
 from collections import defaultdict
 from time import time
+from dotenv import load_dotenv
+import os
+import hmac
+import hashlib
+
+load_dotenv()
+MESSAGEAUTH = os.getenv('SECRET_KEY')
 
 app = Flask(__name__)
 
@@ -264,31 +271,20 @@ def validate_password(password):
 def send_message():
     if request.method == 'POST':
         auth_token = request.cookies.get('authtoken')
-        # Checks if user has auth token
         if auth_token:
-            
-            print(f"Auth Token: {auth_token}")
-            # Gets user info from database collection 
             hashedtoken = (sha256(str(auth_token).encode('utf-8'))).hexdigest()
 
             user_in_database = usercred_collection.find_one({"authtoken": hashedtoken})
 
             if user_in_database:
-                print(f"User is: {user_in_database['username']}")
                 username = user_in_database['username']
-
-                # Get message and recipient
                 data = request.get_json()
                 message = data.get('message')
                 recipient = data.get('recipient')
 
                 message = html.escape(message)
 
-                print(f"Recipient: {recipient}")
-                print((f"Message: {message}"))
-
                 if not message or not recipient:
-                    print ("Message and recipient required")
                     return jsonify({"error": "message and recipient required."}), 400
                 
                 # Check if recipient exists in db
@@ -296,11 +292,15 @@ def send_message():
                 if not recipient_user:
                     return jsonify({"error": "unknown user"}), 400
 
-                # Save message into database
+                # Generate HMAC for the message
+                hmac_hash = hmac.new(MESSAGEAUTH.encode('utf-8'), message.encode('utf-8'), hashlib.sha256).hexdigest()
+
+                # Save message and HMAC hash into database
                 stored_message = {
                     "sender": username,
                     "recipient": recipient,
-                    "message": message
+                    "message": message,
+                    "hmac": hmac_hash  # Store the HMAC hash with the message
                 }
 
                 add_message = message_collection.insert_one(stored_message)
@@ -309,37 +309,44 @@ def send_message():
                 return jsonify(stored_message)
 
 
-            if not user_in_database:
-                print("User records not found")
-                return jsonify({"error": "User records not found"}), 404
-
-        else:
-            return jsonify({"error": "Authtoken not found"}), 401
-
 
 
 @app.route('/get_messages', methods=['GET'])
 def get_messages():
-    #find user by authtoken
     auth_token = request.cookies.get('authtoken')
     if auth_token:
         hashedtoken = (sha256(str(auth_token).encode('utf-8'))).hexdigest()
         user_in_database = usercred_collection.find_one({"authtoken": hashedtoken})
 
-        if user_in_database: # If user is found in database, get and return messages
+        if user_in_database:
             username = user_in_database['username']
             messages = list(message_collection.find({
                 '$or': [{'sender': username}, {'recipient': username}]
             }))
 
             for message in messages:
-                message['_id'] = str(message['_id'])  
-            return jsonify({'messages': messages, 'username': username}) # Ret messages and username
+                message['_id'] = str(message['_id'])
 
+                # Verify the HMAC for message integrity
+                received_hmac = message.get('hmac')
+                if received_hmac:
+                    # Recalculate the HMAC for the message
+                    recalculated_hmac = hmac.new(MESSAGEAUTH.encode('utf-8'), message['message'].encode('utf-8'), hashlib.sha256).hexdigest()
+
+                    # If the HMACs don't match, the message has been tampered with
+                    if received_hmac != recalculated_hmac:
+                        message['integrity_verified'] = False
+                    else:
+                        message['integrity_verified'] = True
+                else:
+                    message['integrity_verified'] = False  # If no HMAC exists, integrity check fails
+
+            return jsonify({'messages': messages, 'username': username})
         else:
             return jsonify({"error": "User records not found"}), 404
     else:
         return jsonify({"error": "Authtoken not found"}), 401
+
     
 @app.after_request
 def set_headers(response):

@@ -2,3 +2,4 @@ Flask
 pymongo
 bcrypt
 requests
+python-dotenv
