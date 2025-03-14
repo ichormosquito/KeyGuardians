@@ -16,7 +16,7 @@ import hmac
 import hashlib
 
 load_dotenv()
-MESSAGEAUTH = os.getenv('SECRET_KEY')
+MESSAGEAUTH = os.getenv('NEW_SECRET_KEY')
 
 app = Flask(__name__)
 
