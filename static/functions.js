@@ -139,7 +139,21 @@ function startConversation() {
             return;
         }
         document.getElementById("newFriendError").textContent = "";
-        loadChatHistory(newFriend);
+        //add new friend to the friends list if not already present
+        const friendsList = document.getElementById('friends-list');
+        const existingFriend = Array.from(friendsList.children).find(friend => friend.textContent === newFriend);//grab friends list and check if new friend is already there
+        if (!existingFriend) {
+            const friendDiv = document.createElement('div');
+            friendDiv.classList.add('friend');
+            friendDiv.textContent = newFriend;
+            friendDiv.onclick = () => {
+                selectedfriend = newFriend; //set selected friend to new friend
+                loadChatHistory(newFriend); //load chat history for new friend
+                pollingFunction();// poll for new messages for this friend
+            };
+            friendsList.appendChild(friendDiv);//append new friend to the friends list
+        }
+        loadChatHistory(newFriend); //load chat history for new friend
     })
     .catch(error => console.error("Error:", error));
 }
