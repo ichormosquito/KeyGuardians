@@ -35,7 +35,7 @@ message_collection = db["messages"]
 
 #DoS protection
 class RateLimiter:
-    def __init__(self, max_requests=50, time_window=10, block_duration=300):
+    def __init__(self, max_requests=100, time_window=30, block_duration=120):
         #store request timestamps by IP
         self.request_history = defaultdict(list) 
         #store blocked IPs with block time
