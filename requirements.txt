@@ -3,3 +3,4 @@ pymongo
 bcrypt
 requests
 pycryptodome
+python-dotenv

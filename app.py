@@ -13,20 +13,105 @@ import base64
 import secrets
 import hashlib
 import io
+import hmac
+from collections import defaultdict
+from time import time
+from dotenv import load_dotenv
 from Crypto.Cipher import AES
 from werkzeug.utils import secure_filename
-from flask import send_file
+from flask import send_file, make_response
 
+
+load_dotenv()
+MESSAGEAUTH = os.getenv('NEW_SECRET_KEY')
 
 app = Flask(__name__,static_folder='static', static_url_path='/static')
-
-
 
 mongo_client = MongoClient("mongodb://mongo:27017/")
 db = mongo_client["secureDove"]
 usercred_collection = db["credentials"]
 message_collection = db["messages"]
 
+
+#DoS protection
+class RateLimiter:
+    def __init__(self, max_requests=50, time_window=10, block_duration=300):
+        #store request timestamps by IP
+        self.request_history = defaultdict(list) 
+        #store blocked IPs with block time
+        self.blocked_ips = {} 
+        #config params
+        self.max_requests = max_requests
+        self.time_window = time_window
+        self.block_duration = block_duration
+        print(f"RateLimiter initialized: {max_requests} requests per {time_window}s, block duration: {block_duration}s")
+    
+    def get_client_ip(self):
+        #extract real client IP from headers or remote_addr
+        ip = request.headers.get('X-Forwarded-For', 
+              request.headers.get('X-Real-IP', request.remote_addr))
+        print(f"Client IP detected: {ip}")
+        return ip
+    
+    def is_allowed(self):
+        #check if request is allowed based on rate limiting rules
+        ip = self.get_client_ip()
+        current_time = time()
+        
+        #check if IP is currently blocked
+        if ip in self.blocked_ips:
+            #if block duration has passed, unblock the IP
+            if current_time - self.blocked_ips[ip] >= self.block_duration:
+                print(f"Unblocking IP: {ip} (block duration expired)")
+                del self.blocked_ips[ip]
+                self.request_history[ip] = []  #clear history for this IP
+            else:
+                block_time_left = int(self.block_duration - (current_time - self.blocked_ips[ip]))
+                print(f"Blocking request from {ip}: still blocked for {block_time_left}s")
+                return False  #IP is still blocked
+        
+        #record this request
+        self.request_history[ip].append(current_time)
+        
+        #remove timestamps older than the time window
+        old_count = len(self.request_history[ip])
+        self.request_history[ip] = [
+            timestamp for timestamp in self.request_history[ip] 
+            if current_time - timestamp <= self.time_window
+        ]
+        new_count = len(self.request_history[ip])
+        if old_count != new_count:
+            print(f"Cleaned {old_count - new_count} old requests from history for {ip}")
+        
+        #check if request count exceeds the limit
+        request_count = len(self.request_history[ip])
+        print(f"Request count for {ip}: {request_count}/{self.max_requests} in last {self.time_window}s")
+        
+        if request_count > self.max_requests:
+            print(f"Rate limit exceeded for {ip}. Blocking for {self.block_duration}s")
+            self.blocked_ips[ip] = current_time  #block this IP
+            return False
+        
+        return True
+
+#initialize rate limiter with custom settings
+#allow 100 requests per minute, block for 10 minutes if exceeded
+rate_limiter = RateLimiter(
+    max_requests=100,
+    time_window=60,
+    block_duration=600
+)
+
+#add rate limiting middleware
+@app.before_request
+def limit_requests():
+    #skip rate limiting for static resources if applicable
+    if request.path.startswith('/static/'):
+        return None
+        
+    if not rate_limiter.is_allowed():
+        print(f"Rate limit response sent: 429 Too Many Requests")
+        return "Rate limit exceeded. Please try again later.", 429
 
 
 @app.route('/')
@@ -54,8 +139,6 @@ def message():
         return redirect(url_for('login'))
 
     return render_template('messageFriends.html', user=user)
-
-
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -199,29 +282,17 @@ def send_message():
         auth_token = request.cookies.get('authtoken')
         # Checks if user has auth token
         if auth_token:
-            
-            print(f"Auth Token: {auth_token}")
-            # Gets user info from database collection 
             hashedtoken = (sha256(str(auth_token).encode('utf-8'))).hexdigest()
-
             user_in_database = usercred_collection.find_one({"authtoken": hashedtoken})
 
             if user_in_database:
-                print(f"User is: {user_in_database['username']}")
                 username = user_in_database['username']
-
-                # Get message and recipient
                 data = request.get_json()
                 message = data.get('message')
                 recipient = data.get('recipient')
-
                 message = html.escape(message)
 
-                print(f"Recipient: {recipient}")
-                print((f"Message: {message}"))
-
                 if not message or not recipient:
-                    print ("Message and recipient required")
                     return jsonify({"error": "message and recipient required."}), 400
                 
                 # Check if recipient exists in db
@@ -229,25 +300,29 @@ def send_message():
                 if not recipient_user:
                     return jsonify({"error": "unknown user"}), 400
 
+                # Generate HMAC for the message
+                if MESSAGEAUTH:
+                    hmac_hash = hmac.new(MESSAGEAUTH.encode('utf-8'), message.encode('utf-8'), hashlib.sha256).hexdigest()
+                else:
+                    hmac_hash = None
+
                 # Save message into database
                 stored_message = {
                     "sender": username,
                     "recipient": recipient,
                     "message": message
                 }
+                if hmac_hash:
+                    stored_message["hmac"] = hmac_hash
 
                 add_message = message_collection.insert_one(stored_message)
                 stored_message["_id"] = str(add_message.inserted_id)
 
                 return jsonify(stored_message)
 
-
-            if not user_in_database:
-                print("User records not found")
-                return jsonify({"error": "User records not found"}), 404
-
-        else:
-            return jsonify({"error": "Authtoken not found"}), 401
+            print("User records not found")
+            return jsonify({"error": "User records not found"}), 404
+        return jsonify({"error": "Authtoken not found"}), 401
 
 @app.route('/get_messages', methods=['GET'])
 def get_messages():
@@ -257,7 +332,7 @@ def get_messages():
         hashedtoken = (sha256(str(auth_token).encode('utf-8'))).hexdigest()
         user_in_database = usercred_collection.find_one({"authtoken": hashedtoken})
 
-        if user_in_database: # If user is found in database, get and return messages
+        if user_in_database:
             username = user_in_database['username']
             messages = list(message_collection.find({
                 '$or': [{'sender': username}, {'recipient': username}]
@@ -265,11 +340,20 @@ def get_messages():
 
             for message in messages:
                 message['_id'] = str(message['_id'])  
+                if "hmac" in message and MESSAGEAUTH:
+                    recalculated_hmac = hmac.new(MESSAGEAUTH.encode('utf-8'), message['message'].encode('utf-8'), hashlib.sha256).hexdigest()
+                    if recalculated_hmac != message["hmac"]:
+                        message["integrity_verified"] = False
+                    else:
+                        message["integrity_verified"] = True
+                else:
+                    message["integrity_verified"] = False
+
             files=list(db["files"].find({"recipient":username}))#retrieve the files send to the user
             for f in files:#make objectId a string and mark it as a file entry
                 f["_id"]= str(f["_id"])
                 f["isFile"]= True
-            combined=messages+files#messages and files are in one list
+            combined=messages+files
             return jsonify({'messages':combined,'username':username})
         else:
             return jsonify({"error": "User records not found"}), 404
@@ -333,6 +417,7 @@ os.makedirs(UPLOAD_FOLDER,exist_ok=True)#checks to make sure the local device fi
 File_Size_Cap=50 *1024*1024  #variable that holds the max size of file which is 50mb.
 ENCRYPTION_KEY= secrets.token_bytes(32)  # 256-bit AES key
 app.config["UPLOAD_FOLDER"]=UPLOAD_FOLDER
+
 def encrypt_file(file_data):
     iv =secrets.token_bytes(16)#enerate a random IV
     cipher=AES.new(ENCRYPTION_KEY, AES.MODE_CBC,iv)
@@ -340,6 +425,7 @@ def encrypt_file(file_data):
     file_data+=bytes([pad_len] * pad_len)  #padding
     encrypted_data=cipher.encrypt(file_data)
     return iv+ encrypted_data
+
 def compute_checksum(file_data):#helper to get checksum value
     return hashlib.sha256(file_data).hexdigest()
 
@@ -373,12 +459,14 @@ def upload_file():
         "filename":filename,"checksum":checksum,"file_path": file_path}
     db["files"].insert_one(file_entry)
     return jsonify({"message": "file uploaded"}),200
+
 def decrypt_file(encrypted_data):
     iv =encrypted_data[:16]#take IV from the first 16 bytes
     cipher=AES.new(ENCRYPTION_KEY,AES.MODE_CBC, iv)
-    decrypted_data=cipher.decrypt(encrypted_data[16:])#decrypt after IV
+    decrypted_data=cipher.decrypt(encrypted_data[16:])
     pad_len = decrypted_data[-1]
     return decrypted_data[:-pad_len]#take away padding
+
 @app.route('/download_file/<filename>',methods=['GET'])
 def download_file(filename):
     file_entry=db["files"].find_one({"filename":filename})

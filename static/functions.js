@@ -77,23 +77,31 @@ function loadChatHistory(friend) {
                     if(msg.isFile){
                         const fileDiv=document.createElement('div');
                         if (msg.sender=== loggedInUser) {
-                            fileDiv.classList.add('user-message');}
+                            fileDiv.classList.add('user-message');
+                        }
                         else{
-                            fileDiv.classList.add('recieved-message');}
+                            fileDiv.classList.add('recieved-message');
+                        }
                         const downloadLink=document.createElement('a');
                         downloadLink.href=`/download_file/${msg.filename}`;
                         downloadLink.textContent=`Download ${msg.filename}`;
                         downloadLink.download =msg.filename;
                         fileDiv.appendChild(downloadLink);
-                        chatBox.appendChild(fileDiv);}
-                        else{
+                        chatBox.appendChild(fileDiv);
+                    }
+                    else{
                         const messageDiv = document.createElement('div');
                         if(msg.sender === loggedInUser){
-                            messageDiv.classList.add('user-message');}
+                            messageDiv.classList.add('user-message');
+                        }
                         else{
-                            messageDiv.classList.add('recieved-message');}
+                            messageDiv.classList.add('recieved-message');
+                        }
                         messageDiv.textContent= `${msg.sender}: ${msg.message}`;
-                        chatBox.appendChild(messageDiv);}}});            
+                        chatBox.appendChild(messageDiv);
+                    }
+                }
+            });            
             document.getElementById("input-container").style.display = "flex";
             loadReceivedFiles();
         })
@@ -157,8 +165,24 @@ function startConversation() {
             document.getElementById("newFriendError").textContent = data.error;
             return;}
         document.getElementById("newFriendError").textContent = "";
-        loadChatHistory(newFriend);})
-    .catch(error => console.error("Error:", error));}
+        const friendsList = document.getElementById('friends-list');
+        const existingFriend = Array.from(friendsList.children).find(friend => friend.textContent === newFriend);
+        if (!existingFriend) {
+            const friendDiv = document.createElement('div');
+            friendDiv.classList.add('friend');
+            friendDiv.textContent = newFriend;
+            friendDiv.onclick = () => {
+                selectedfriend = newFriend;
+                loadChatHistory(newFriend);
+                pollingFunction();
+            };
+            friendsList.appendChild(friendDiv);
+        }
+        loadChatHistory(newFriend);
+    })
+    .catch(error => console.error("Error:", error));
+}
+
 function uploadFile(){// functionality for file upload
     let fileInput=document.getElementById("fileInput");
     let file= fileInput.files[0];
@@ -178,7 +202,9 @@ function uploadFile(){// functionality for file upload
             return;}
         console.log("File uploaded successfully");
         loadReceivedFiles();})
-    .catch(error => console.error("Error:", error));}
+    .catch(error => console.error("Error:", error));
+}
+
 function loadReceivedFiles(){// loads the received files
     fetch('/get_messages')
         .then(response =>response.json())
@@ -197,8 +223,13 @@ function loadReceivedFiles(){// loads the received files
                     downloadLink.href =`/download_file/${msg.filename}`;
                     downloadLink.textContent= `Download ${msg.filename}`;
                     listItem.appendChild(downloadLink);
-                    fileList.appendChild(listItem);}});})
-        .catch(error => console.error("Error:",error));}
+                    fileList.appendChild(listItem);
+                }
+            });
+        })
+        .catch(error => console.error("Error:",error));
+}
+
 let ajaxPollingInterval; 
 let messageCountUpdate = 0; 
 function pollingFunction(){
@@ -219,7 +250,7 @@ function pollingFunction(){
                     messages.forEach(msg =>{
                         if(msg.isFile){
                             const fileDiv =document.createElement('div');
-                            if(msg.sender===loggedInUser){
+                            if(msg.sender===data.username){
                                 fileDiv.classList.add('user-message');}
                             else{
                                 fileDiv.classList.add('recieved-message');}
@@ -231,7 +262,7 @@ function pollingFunction(){
                             chatBox.appendChild(fileDiv);}
                         else{
                             const messageDiv=document.createElement('div');
-                            if(msg.sender=== loggedInUser) {
+                            if(msg.sender=== data.username) {
                                 messageDiv.classList.add('user-message');}
                             else{
                                 messageDiv.classList.add('recieved-message');}
